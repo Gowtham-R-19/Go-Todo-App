@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: go-todo-app
+    env: go
+    buildCommand: "go build -o main main.go"
+    startCommand: "./main"  # This tells Render how to run your Go app
+    envVars:
+      - key: MONGO_URI
+        value: "mongodb+srv://gotodoapp:gotodo123@cluster0.zchbnpl.mongodb.net/"
+    plan: free
