@@ -68,7 +68,12 @@ func main() {
 
 	r.GET("/metrics", getMetrics) // Metrics endpoint
 
-	r.Run(":8080")
+	// Handle dynamic port for Render
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default for local
+	}
+	r.Run(":" + port)
 }
 
 // Create a new todo
