@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-todo-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-todo-app
+  template:
+    metadata:
+      labels:
+        app: my-todo-app
+    spec:
+      containers:
+      - name: my-todo-app
+        image: my-todo-app:latest
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - secretRef:
+            name: my-todo-app-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-todo-app
+spec:
+  selector:
+    app: my-todo-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: NodePort

@@ -1,0 +1,92 @@
+1. Build Docker Images
+Make sure your Docker image for the My Todo App (my-todo-app:latest) is built and available in Minikube.
+
+Set up Minikube's Docker environment:
+
+bash
+Copy code
+eval $(minikube docker-env)
+Build your Docker image:
+
+bash
+Copy code
+docker build -t my-todo-app:latest -f Dockerfile .
+2. Apply the Kubernetes Resources
+Once your Docker image is built, apply all the Kubernetes resources:
+
+Apply the Secret:
+
+bash
+Copy code
+kubectl apply -f secret.yaml
+Apply the MongoDB Deployment and Service:
+
+bash
+Copy code
+kubectl apply -f mongo-deployment.yaml
+kubectl apply -f mongo-service.yaml
+Apply the My Todo App Deployment and Service:
+
+bash
+Copy code
+kubectl apply -f my-todo-app-deployment.yaml
+kubectl apply -f my-todo-app-service.yaml
+3. Verify the Resources
+Check the status of your pods:
+
+bash
+Copy code
+kubectl get pods
+Check the status of your services to ensure they are running:
+
+bash
+Copy code
+kubectl get services
+4. Access the My Todo App via Minikube
+Once your Todo app is deployed, you can access it via Minikube's NodePort.
+
+Get the URL of your My Todo App service:
+
+bash
+Copy code
+minikube service my-todo-app --url
+This will output a URL like:
+
+arduino
+Copy code
+http://192.168.99.100:30001
+Open this URL in your browser to access the My Todo App.
+
+5. Check Logs (if needed)
+If the pods are not running or if you encounter any issues, you can check the logs for troubleshooting:
+
+For the My Todo App pod:
+
+bash
+Copy code
+kubectl logs <my-todo-app-pod-name>
+For the MongoDB pod:
+
+bash
+Copy code
+kubectl logs <mongo-pod-name>
+6. Scaling the Replica (Optional)
+If you need to ensure at least one pod is running, you can manually scale the deployment:
+
+bash
+Copy code
+kubectl scale deployment my-todo-app --replicas=1
+7. Deleting and Recreating Resources (Optional)
+If necessary, you can delete the resources and recreate them:
+
+bash
+Copy code
+kubectl delete pod -l app=my-todo-app
+kubectl delete deployment my-todo-app
+kubectl delete service my-todo-app
+Then, reapply the configuration:
+
+bash
+Copy code
+kubectl apply -f my-todo-app-deployment.yaml
+kubectl apply -f my-todo-app-service.yaml

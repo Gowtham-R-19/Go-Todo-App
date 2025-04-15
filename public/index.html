@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App</title>
+    <link rel="stylesheet" href="/public/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <script>
+        let currentEditId = null;
+        let deleteId = null;
+
+        async function sendTodo(event) {
+            event.preventDefault();
+            const content = document.getElementById('content').value;
+            const date = document.getElementById('date').value;
+
+            // Check if editing an existing todo
+            if (currentEditId) {
+                const response = await fetch(`/todos/${currentEditId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, date }),
+                });
+
+                document.getElementById('result').innerText = response.ok
+                    ? 'Todo updated successfully!'
+                    : `Error: ${(await response.json()).error}`;
+            } else {
+                // Add new todo
+                const response = await fetch('/todos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, date }),
+                });
+
+                document.getElementById('result').innerText = response.ok
+                    ? 'Todo added successfully!'
+                    : `Error: ${(await response.json()).error}`;
+
+                // Trigger confetti on successful addition
+                if (response.ok) {
+                    launchConfetti();
+                }
+            }
+
+            // Reset the input field and edit ID
+            document.getElementById('content').value = '';
+            document.getElementById('date').value = '';
+            currentEditId = null;
+            fetchTodos(); // Refresh the todo list
+            updateButton(); // Reset button text
+        }
+        
+
+        function launchConfetti() {
+            const duration = 3 * 1000; 
+            const animationEnd = Date.now() + duration;
+            const defaults = {
+                startVelocity: 30,
+                spread: 360,
+                ticks: 60,
+                zIndex: 1000,
+            };
+            function animate() {
+                const timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) return;
+
+                const particleCount = 50 * (timeLeft / duration);
+                const cornerOrigins = [
+                    { x: 0, y: 0.9 },
+                    { x: 1, y: 0.9 },
+                    { x: 1, y: 0.1 },
+                    { x: 0, y: 0.1 }
+                ];
+                cornerOrigins.forEach(origin => {
+                    confetti({
+                        ...defaults,
+                        particleCount: Math.floor(particleCount / cornerOrigins.length),
+                        origin: origin
+                    });
+                });
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        async function fetchTodos() {
+            const response = await fetch('/todos');
+            if (!response.ok) {
+                console.error('Failed to fetch todos:', response.status);
+                return;
+            }
+            const todos = await response.json();
+
+            const now = new Date();
+            const today = now.toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+            const tomorrow = new Date(now);
+            tomorrow.setDate(now.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0]; // Get tomorrow's date in YYYY-MM-DD format
+
+            const todoTableBody = document.getElementById('todoTableBody');
+            todoTableBody.innerHTML = '';
+
+            todos.forEach((todo, index) => {
+                const row = document.createElement('tr');
+                const reminderDate = new Date(todo.date);
+                const isToday = reminderDate.toISOString().split('T')[0] === today;
+                const isTomorrow = reminderDate.toISOString().split('T')[0] === tomorrowStr;
+
+                // Check if the task is overdue
+                if (todo.status === 'incomplete' && reminderDate < now) {
+                    todo.status = 'overdue'; // Set status to overdue
+                }
+                
+                if (isToday) {
+                    row.style.backgroundColor = 'lightcoral'; // Highlight row if reminder is today
+                } 
+                // else if (isTomorrow) {
+                    //row.style.backgroundColor = 'gold'; // Highlight row if reminder is tomorrow
+                //}
+
+                row.className = todo.status; // Apply class to the entire row for styling
+
+                // Format the reminder time display
+                const formattedTime = reminderDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                const formattedDate = reminderDate.toLocaleDateString(); // Adjust format if needed
+                const displayTime = isToday ? `Today, ${formattedTime}` : isTomorrow ? `Tomorrow, ${formattedTime}` : `${formattedDate}, ${formattedTime}`;
+
+                row.innerHTML = `
+                    <td>
+                        <div class="checkbox-wrapper-1">
+                            <div class="round">
+                            <input type="checkbox" id="checkbox-${todo.id}" onchange="toggleStatus('${todo.id}', this)" ${todo.status === 'complete' ? 'checked disabled' : ''}>
+                            <label for="checkbox-${todo.id}"></label>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${index + 1}</td>
+                    <td>${todo.content}</td>
+                    <td class="${todo.status === 'complete' ? 'completed' : todo.status === 'overdue' ? 'overdue' : ''}">
+                        ${todo.status.charAt(0).toUpperCase() + todo.status.slice(1)}
+                    </td>
+                    <td>${displayTime}</td>
+                    <td>
+                        <button class="editBtn" onclick="editTodo('${todo.id}', '${todo.content}', '${todo.date}')" ${todo.status === 'complete' || todo.status === 'overdue' ? 'disabled' : ''}>✏️</button>
+                        <button class="deleteBtn" onclick="openDeleteDialog('${todo.id}')">❌</button>
+                    </td>
+                `;
+                todoTableBody.appendChild(row);
+
+                // Check for reminder alerts
+                if (todo.status === 'incomplete') {
+                    const timeDiff = reminderDate - now;
+                    if (timeDiff >= 0 && timeDiff < 10 * 60 * 1000) { // If less than 10 minutes
+                        showAlertDialog(todo.content);
+                    }
+                }
+            });
+        }
+
+        function showAlertDialog(content) {
+            const alertDialog = document.getElementById('alertDialog');
+            document.getElementById('alertMessage').innerText = `Reminder: Complete your todo: "${content}"`;
+            alertDialog.style.display = 'flex';
+        }
+
+        async function toggleStatus(id, checkbox) {
+            const newStatus = checkbox.checked ? 'complete' : 'incomplete';
+
+            const response = await fetch(`/todos/${id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: newStatus }),
+            });
+
+            if (!response.ok) {
+                console.error('Failed to update todo status:', response.status);
+                return;
+            } else {
+                document.getElementById('result').innerText = 'Todo marked as completed!';
+            }
+
+            fetchTodos(); // Refresh the todo list
+        }
+
+        async function editTodo(id, content, date) {
+            currentEditId = id;
+            document.getElementById('content').value = content;
+            document.getElementById('date').value = date;
+            document.getElementById('submitBtn').innerText = 'Update';
+        }
+
+        function updateButton() {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = currentEditId ? 'Update' : 'Add Todo';
+        }
+
+        function openDeleteDialog(id) {
+            deleteId = id;
+            document.getElementById('deleteDialog').style.display = 'flex';
+        }
+
+        function closeDeleteDialog() {
+            document.getElementById('deleteDialog').style.display = 'none';
+        }
+
+        async function deleteTodo() {
+            const response = await fetch(`/todos/${deleteId}`, {
+                method: 'DELETE',
+            });
+
+            document.getElementById('result').innerText = response.ok
+                ? 'Todo deleted successfully!'
+                : `Error: ${(await response.json()).error}`;
+
+            fetchTodos(); // Refresh the todo list
+            closeDeleteDialog();
+        }
+
+        function setCurrentDateTime() {
+            const now = new Date();
+            const offset = now.getTimezoneOffset() * 60000; // Get timezone offset in milliseconds
+            const localDate = new Date(now.getTime() - offset); // Adjust to local time
+            const datetimeLocal = localDate.toISOString().slice(0, 16); // Format to YYYY-MM-DDTHH:MM
+            document.getElementById('date').value = datetimeLocal;
+        }
+
+        function goToScales() {
+            window.location.href = '/public/scales.html';
+        }
+
+        // Fetch todos and set current datetime on page load
+        window.onload = function() {
+            fetchTodos();
+            setCurrentDateTime();
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Todo App</h1>
+        <!-- <button onclick="goToScales()">View Scales Metrics</button> <!-- New Link --> 
+        <div class="form-container">
+            <form onsubmit="sendTodo(event)" class="todo-form">
+                <div class="form-group">
+                    <input type="text" id="content" required placeholder=" " />
+                    <label class="floating-label" for="content">Add your task here...</label>
+                </div>
+                <div class="datetimepicker">
+                    <input type="datetime-local" id="date" required />
+                </div>
+                <button type="submit" id="submitBtn" class="add-btn">Add Todo</button>
+            </form>
+            <div id="result"></div>
+        </div>
+
+        <h2>Todo List</h2>
+        <div class="todo-list">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>ID</th>
+                        <th>Task</th>
+                        <th>Status</th>
+                        <th>Reminder</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="todoTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <div id="deleteDialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Delete Confirmation</h3>
+            <p>Are you sure you want to delete this todo?</p>
+            <button onclick="deleteTodo()">Yes</button>
+            <button onclick="closeDeleteDialog()">No</button>
+        </div>
+    </div>
+
+    <!-- Reminder Alert Dialog -->
+    <div id="alertDialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Reminder</h3>
+            <p id="alertMessage"></p>
+            <button onclick="document.getElementById('alertDialog').style.display='none'">Close</button>
+        </div>
+    </div>
+</body>
+</html>
